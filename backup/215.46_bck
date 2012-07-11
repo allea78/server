@@ -1,0 +1,57 @@
+#!/bin/bash
+
+rsync -vaz --exclude cestino/ --exclude laureaonline/2002_2006/ --exclude worker/ root@192.168.215.46:/var/www/  /mnt/backup/215.46/web/ > /mnt/backup/215.46/log/bck_siti_$(date +%Y%m%d%H%M%S).log ;
+
+rsync -vaz  root@192.168.215.46:/var/lib/mysql/  /mnt/backup/215.46/mysql/ > /mnt/backup/215.46/log/bck_db_$(date +%Y%m%d%H%M%S).log ;
+
+rsync -vaz  --exclude laureaonline/2007/ --exclude laureaonline/2008/ --exclude laureaonline/2009/ --exclude laureaonline/2010/ root@192.168.215.46:/var/documenti/  /mnt/backup/215.46/documenti/ > /mnt/backup/215.46/log/bck_doc_$(date +%Y%m%d%H%M%S).log ;
+
+
+MOUNTED=$(df | grep 2TERA | awk '{print $6}')
+
+if [ "$MOUNTED" == "/media/2TERA" ]
+then
+
+rsync -vaz root@192.168.215.46:/var/documenti/laureaonline/2007 /media/2TERA/215.46/documenti/laureaonline/ > /mnt/backup/215.46/log/bck_doc_2007_$(date +%Y%m%d%H%M%S).log ;
+
+rsync -vaz root@192.168.215.46:/var/documenti/laureaonline/2008 /media/2TERA/215.46/documenti/laureaonline/ > /mnt/backup/215.46/log/bck_doc_2008_$(date +%Y%m%d%H%M%S).log ;
+
+rsync -vaz root@192.168.215.46:/var/documenti/laureaonline/2009 /media/2TERA/215.46/documenti/laureaonline/ > /mnt/backup/215.46/log/bck_doc_2009_$(date +%Y%m%d%H%M%S).log ;
+
+rsync -vaz root@192.168.215.46:/var/documenti/laureaonline/2010 /media/2TERA/215.46/documenti/laureaonline/ > /mnt/backup/215.46/log/bck_doc_2010_$(date +%Y%m%d%H%M%S).log ;
+
+else	
+	echo "non è montato"
+fi
+
+rsync -vaz root@192.168.215.46:/var/bck_database/  /mnt/backup/215.46/bck_database/ > /dev/null ;
+
+cd /mnt/backup/215.46/bck_database/ ;
+
+find . -ctime +15 -name "*.sql" -delete ;
+
+cd /mnt/backup/215.46/log/ ;
+
+find . -ctime +7 -name "*.log" -delete ;
+
+
+############################
+#
+# BACKUP DEL DB SETTIMANALE
+#
+############################
+
+GIORNO=$(date +%a)
+
+if [ $GIORNO == "lun" ]
+ then
+	cp -pr /mnt/backup/215.46/mysql /mnt/backup/215.46/bck_database/settimanale/$(date +%Y%m%d) ;
+	cd /mnt/backup/215.46/bck_database/settimanale/ ;
+	find . -ctime +10 -delete ;
+ else
+	echo "non è lunedì" ;
+
+ fi
+
+
+exit 0
