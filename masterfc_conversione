@@ -1,0 +1,152 @@
+#!/bin/bash
+
+# ==================================================================
+# Imposta la cartella dove andranno inseriti i file .mov
+# ==================================================================
+
+inputdir=~/rec_masterfc
+
+if [ -d $inputdir ]; then
+	echo -e "\nla cartella $inputdir esiste, OK!\n"
+
+else
+	echo -e "\nla cartella $inputdir NON esiste, la creo...\n"
+	mkdir ~/rec_masterfc
+fi
+
+#===================================================================
+# Controlla se c'è un upload in corso e se c'è aspetta
+#===================================================================
+
+dim1=$(du -s $inputdir | awk '{print $1}');
+sleep 4 ;
+dim2=$(du -s $inputdir | awk '{print $1}');
+
+while [ $dim1 != $dim2 ]
+do
+
+dim1=$(du -s $inputdir | awk '{print $1}');
+sleep 4 ;
+dim2=$(du -s $inputdir | awk '{print $1}');
+echo "attendere, upload in corso..." ;
+
+done
+
+# ==================================================================
+# Controlla se ci sono i file mov se no esce
+# ==================================================================
+
+estensione=".mov"
+
+num_files=$(ls $inputdir|grep $estensione|wc -l)
+
+if [ "$num_files" -gt "0" ]
+then
+	echo -e "ci sono $num_files file mov da convertire, procedo...\n"
+else
+	echo -e "NON ci sono file mov da convertire, esco...\n(devi inserire i file .mov in $inputdir)\n"
+	exit 1
+fi
+
+
+# ==================================================================
+# Imposta la cartella dove andranno tutti file convertiti
+# ==================================================================
+
+conver_dir=~/conversioni
+
+if [ -d $conver_dir ]; then
+	echo -e "la cartella $conver_dir esiste, procedo...\n"
+else
+	echo -e "\nla cartella $conver_dir NON esiste, la creo...\n"
+	mkdir ~/conversioni
+fi
+
+sleep 3s ;
+
+# ==================================================================
+# Elimina i file zip che iniziano con "A" che hanno più di 16 giorni
+# ==================================================================
+
+find $conver_dir -mtime +16 -name "A*.zip" -delete ;
+
+# ==================================================================
+# Toglie eventuali spazi nei file .mov
+# ==================================================================
+
+ls -1 $inputdir | rename s/\ /_/g $inputdir/*.mov ;
+
+# ==================================================================
+# Imposta e crea la cartella di destinazione con la data,
+# all'interno la cartella "mov" e sposta dentro i file .mov
+# ==================================================================
+
+destdir=~/conversioni/`date +%Y%m%d%H%M`
+
+mkdir $destdir ;
+mkdir $destdir/mov ;
+mv $inputdir/*.mov $destdir/mov ;
+
+# ==================================================================
+# Inizia la conversione:
+# per ogni mov un video formato avi con codec video xvid e un audio
+# formato mp3
+# ==================================================================
+
+echo -e "Inizio conversione avvenuto alle `date +%H:%M`\n" > $conver_dir/conver.log
+
+for file in $(find $destdir -iname "*.mov") ; do name=$(basename $file .mov) ;
+	ffmpeg -i $file -threads 2 -maxrate 180 -qscale 4 -qmax 4 -r 15 -vcodec libxvid -vpre masterfc -acodec libmp3lame $destdir/AV_$name.avi ;
+
+	ffmpeg -i $file -threads 2 -acodec libmp3lame $destdir/AU_$name.mp3 ; done
+
+# ==================================================================
+# Zippa i file prodotti e poi li cancella .avi e .mp3
+# ==================================================================
+
+cd $destdir ;
+
+for file in $(find -iname "*.avi") ; do name=$(basename $file .avi) ;
+	zip $name.zip $file ;
+	rm -f $file ; done
+
+for file in $(find -iname "*.mp3") ; do name=$(basename $file .mp3) ;
+	zip $name.zip $file ;
+	rm -f $file ; done
+
+# ==================================================================
+# Trasferisce i file video e audio sul portale masterfc in due
+# due cartelle distinte
+# Attenzione: solo l'utente "luisa" può collegarsi in ssh senza
+# inserire la password dell'host remoto
+# ==================================================================
+
+scp $destdir/AU*.zip root@192.168.215.27:/Volumes/Mirror/documenti/masterfc/masterfc_11/3/registrazioni_audio/. ;
+
+scp $destdir/AV*.zip root@192.168.215.27:/Volumes/Mirror/documenti/masterfc/masterfc_11/4/registrazioni_video/. ;
+
+# ==================================================================
+# Parte rigurdante il log
+# ==================================================================
+
+#rm $conver_dir/conver.log
+
+echo -e "Convertiti $num_files file .mov\n" >> $conver_dir/conver.log
+echo -e "Questo e' il contenuto di\n" >> $conver_dir/conver.log
+ls -ARlh $destdir >> $conver_dir/conver.log
+echo -e "========================================" >> $conver_dir/conver.log
+echo -e "\nSpazio utilizzato e disponibile:\n" >> $conver_dir/conver.log
+df -h | grep -E 'Disp|home' >> $conver_dir/conver.log
+echo -e "========================================" >> $conver_dir/conver.log
+echo -e "\nControllo dei file zip prodotti:\n" >> $conver_dir/conver.log
+unzip -tq $destdir/\*.zip >> $conver_dir/conver.log
+echo -e "========================================" >> $conver_dir/conver.log
+echo -e "\nFINE" >> $conver_dir/conver.log
+
+# ==================================================================
+# Spedisce una mail che ha come testo il log
+# ==================================================================
+
+mail -s "conversione masterfc terminata `date +%a\ %d\ %b\ %Y` alle ore `date +%H:%M`" al@mail.it <$conver_dir/conver.log
+
+exit 0
